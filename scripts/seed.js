@@ -9,6 +9,9 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+// Load environment variables
+require('dotenv').config({ path: path.join(__dirname, '..', '.env.local') });
+
 async function runSeeds() {
   console.log('🌱 Starting database seeding...');
 
