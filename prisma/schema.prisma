@@ -1,0 +1,234 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  firstName    String?
+  lastName     String?
+  role         String   @default("user")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  sales       Sale[]
+  userRoles   UserRole[]
+
+  @@map("users")
+}
+
+model Customer {
+  id             String   @id @default(uuid())
+  firstName      String   @map("first_name")
+  lastName       String   @map("last_name")
+  email          String?  @unique
+  phone          String?
+  address        String?
+  city           String?
+  state          String?
+  zipCode        String?  @map("zip_code")
+  country        String?  @default("US")
+  loyaltyPoints  Int      @default(0) @map("loyalty_points")
+  totalPurchases Decimal  @default(0) @map("total_purchases") @db.Decimal(10, 2)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  sales Sale[]
+
+  @@map("customers")
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  sku         String?  @unique
+  barcode     String?  @unique
+  categoryId  String?  @map("category_id")
+  price       Decimal  @db.Decimal(10, 2)
+  cost        Decimal  @default(0) @db.Decimal(10, 2)
+  taxRate     Decimal  @default(0) @db.Decimal(5, 2)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  category     Category?     @relation(fields: [categoryId], references: [id])
+  inventories  Inventory[]
+  saleItems    SaleItem[]
+
+  @@map("products")
+}
+
+model Inventory {
+  id           String   @id @default(uuid())
+  productId    String   @map("product_id")
+  quantity     Int      @default(0)
+  minQuantity  Int?     @default(0) @map("min_quantity")
+  maxQuantity  Int?     @map("max_quantity")
+  location     String?
+  lastUpdated  DateTime @default(now()) @map("last_updated")
+
+  // Relations
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, location])
+  @@map("inventory")
+}
+
+model Sale {
+  id               String   @id @default(uuid())
+  customerId       String?  @map("customer_id")
+  userId           String   @map("user_id")
+  totalAmount      Decimal  @db.Decimal(10, 2) @map("total_amount")
+  taxAmount        Decimal  @default(0) @db.Decimal(10, 2) @map("tax_amount")
+  discountAmount   Decimal  @default(0) @db.Decimal(10, 2) @map("discount_amount")
+  paymentMethodId  String?  @map("payment_method_id")
+  paymentStatusId  String?  @map("payment_status_id")
+  saleStatusId     String?  @map("sale_status_id")
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  customer       Customer?      @relation(fields: [customerId], references: [id])
+  user           User           @relation(fields: [userId], references: [id])
+  paymentMethod  PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+  paymentStatus  PaymentStatus? @relation(fields: [paymentStatusId], references: [id])
+  saleStatus     SaleStatus?    @relation(fields: [saleStatusId], references: [id])
+  saleItems      SaleItem[]
+
+  @@map("sales")
+}
+
+model SaleItem {
+  id         String  @id @default(uuid())
+  saleId     String  @map("sale_id")
+  productId  String  @map("product_id")
+  quantity   Int
+  unitPrice  Decimal @db.Decimal(10, 2) @map("unit_price")
+  discount   Decimal @default(0) @db.Decimal(10, 2)
+  taxAmount  Decimal @default(0) @db.Decimal(10, 2) @map("tax_amount")
+  totalPrice Decimal @db.Decimal(10, 2) @map("total_price")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("sale_items")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  resource  String
+  action    String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  // Relations
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model PaymentMethod {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  sales Sale[]
+
+  @@map("payment_methods")
+}
+
+model PaymentStatus {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  sales Sale[]
+
+  @@map("payment_statuses")
+}
+
+model SaleStatus {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  sales Sale[]
+
+  @@map("sale_statuses")
+}
