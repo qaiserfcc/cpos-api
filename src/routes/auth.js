@@ -2,9 +2,38 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
+const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+/**
+ * @swagger
+ * /api/auth/roles:
+ *   get:
+ *     tags:
+ *       - Authentication
+ *     summary: Get all available roles
+ *     description: Retrieve all roles available for user registration
+ *     responses:
+ *       200:
+ *         description: Roles retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 roles:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Role'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 
 /**
  * @swagger
@@ -40,10 +69,31 @@ const prisma = new PrismaClient();
  *               $ref: '#/components/schemas/Error'
  */
 
+// Get all available roles
+router.get('/roles', async (req, res) => {
+  try {
+    const roles = await prisma.role.findMany({
+      select: {
+        id: true,
+        name: true,
+        description: true
+      },
+      orderBy: {
+        name: 'asc'
+      }
+    });
+
+    res.json({ roles });
+  } catch (error) {
+    console.error('Get roles error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Register new user
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, firstName, lastName } = req.body;
+    const { email, password, firstName, lastName, businessName, roleId } = req.body;
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -64,9 +114,20 @@ router.post('/register', async (req, res) => {
         email,
         passwordHash,
         firstName,
-        lastName
+        lastName,
+        role: businessName || 'user' // Use businessName as role if provided, otherwise default to 'user'
       }
     });
+
+    // If roleId is provided, assign the role
+    if (roleId) {
+      await prisma.userRole.create({
+        data: {
+          userId: user.id,
+          roleId: roleId
+        }
+      });
+    }
 
     // Generate JWT token
     const token = jwt.sign(
@@ -82,7 +143,9 @@ router.post('/register', async (req, res) => {
         id: user.id,
         email: user.email,
         firstName: user.firstName,
-        lastName: user.lastName
+        lastName: user.lastName,
+        businessName: businessName,
+        role: user.role
       }
     });
   } catch (error) {
@@ -135,7 +198,7 @@ router.post('/login', async (req, res) => {
 });
 
 // Get current user profile
-router.get('/profile', async (req, res) => {
+router.get('/profile', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
 
@@ -177,7 +240,7 @@ router.get('/profile', async (req, res) => {
 });
 
 // Update user profile
-router.put('/profile', async (req, res) => {
+router.put('/profile', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
     const { firstName, lastName } = req.body;
